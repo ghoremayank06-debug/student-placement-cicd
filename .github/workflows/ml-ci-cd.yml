@@ -1,0 +1,47 @@
+name: Student Placement CI-CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+      - name: Code quality check
+        run: ruff check train.py app.py test_model.py --select E9,F63,F7,F82
+      - name: Validate data, train model, and enforce quality threshold
+        run: python train.py
+      - name: Verify trained model exists
+        run: python -c "from pathlib import Path; p=Path('model.pkl'); assert p.is_file() and p.stat().st_size > 0, 'model.pkl missing or empty'; print('Model artifact verified')"
+      - name: Run unit and API tests
+        run: pytest -q
+      - name: Upload trained model artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: student-placement-model
+          path: model.pkl
+          if-no-files-found: error
+
+  deploy:
+    needs: test-and-validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deployment gate
+        run: echo "All CI checks passed. Deployment gate passed; configure a real hosting target to deploy the API."
